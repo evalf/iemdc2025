@@ -1,0 +1,21 @@
+<svg version="1.1" baseProfile="full" xmlns="http://www.w3.org/2000/svg" viewBox="-150 -150 300 300" width="300px" height="300px">
+    <g transform="scale(125 -125)" stroke-width="0.008px">
+        <circle r="1" fill="none" stroke="black"/>
+        <circle r="0.1" fill="none" stroke="black"/>
+        <circle r="0.1" cx="-0.5" cy="0.3" fill="#f00"/>
+        <circle r="0.1" cx="0.5" cy="0.3" fill="#00f"/>
+        <path transform="rotate(30)" fill="#888" fill-rule="evenodd" d="
+            M                 0.3  0.0
+            A 0.2 0.3 90 0 1  0.0  0.2
+              0.2 0.3 90 0 1 -0.3  0.0
+              0.2 0.3 90 0 1  0.0 -0.2
+              0.2 0.3 90 0 1  0.3  0.0
+            Z
+            M                 0.1  0.0
+            A 0.1 0.1 90 0 1  0.0  0.1
+              0.1 0.1 90 0 1 -0.1  0.0
+              0.1 0.1 90 0 1  0.0 -0.1
+              0.1 0.1 90 0 1  0.1  0.0
+            Z"/>
+    </g>
+</svg>
