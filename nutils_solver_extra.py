@@ -85,10 +85,9 @@ def minimize(scalar, residual, target, trial, test, *, tol, constrain=None, argu
     free = {}
     for arg in itertools.chain(x, y, z):
         shape = evaluable.eval_once(arg.shape)
-        if (val := arguments.get(arg.name)) is not None:
-            val = numpy.copy(val)
-        else:
-            val = numpy.zeros(shape, dtype)
+        val = numpy.zeros(shape, dtype)
+        if (init_val := arguments.get(arg.name)) is not None:
+            val[...] = init_val
         arguments[arg.name] = val
         if constrain and (c := constrain.get(arg.name)) is not None:
             assert c.shape == shape
@@ -126,9 +125,12 @@ def minimize(scalar, residual, target, trial, test, *, tol, constrain=None, argu
     treelog.info('minimizing {}'.format(' and '.join(info_parts)))
 
     dyz = numpy.zeros((nz_free, ny_free), dtype)
+    update_dyz = True
 
     for i in itertools.count():
         with treelog.context(f'iter {i}'):
+            if i > 20:
+                raise Exception('maximum number of iterations reached')
             if i == 0:
                 values = iter(eval_all(arguments))
                 is_evaluated = itertools.repeat(True)
@@ -159,11 +161,15 @@ def minimize(scalar, residual, target, trial, test, *, tol, constrain=None, argu
                 g = _assemble(next(values), dtype, z_free)
             if next(is_evaluated):
                 dyg = _assemble(next(values), dtype, z_free, y_free)
+                update_dyz = True
             if next(is_evaluated):
                 dzg = matrix.assemble_block_csr(next(values)).submatrix(z_free, z_free)
+                update_dyz = True
 
-            for j in range(dyz.shape[1]):
-                dyz[:,j] = -dzg.solve(dyg[:,j])
+            if update_dyz:
+                for j in range(dyz.shape[1]):
+                    dyz[:,j] = -dzg.solve(dyg[:,j])
+                update_dyz = False
 
             grad = numpy.concatenate([dxf, dyf + dzf @ dyz, g])
             norm_grad = numpy.linalg.norm(grad)
