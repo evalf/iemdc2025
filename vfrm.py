@@ -110,7 +110,7 @@ class Geometry:
     def mesh(self, space: str):
         ref_length = Length('m')
         topo, geom = mesh.gmsh(
-            Path(__file__).parent/'machine.geo',
+            Path(__file__).parent/'vfrm.geo',
             dimension=2,
             order=2,
             space=space,
@@ -192,10 +192,10 @@ class Machine:
 
     def __init__(
         self,
-        geometry: Geometry,
-        driver: Driver,
-        nelems_angle: int,
-        degree: int,
+        geometry: Geometry = Geometry(),
+        driver: Driver = Driver(),
+        nelems_angle: int = 6,
+        degree: int = 2,
     ):
 
         # REFERENCE LENGTHS
@@ -360,7 +360,7 @@ class Machine:
 
     @treelog.withcontext
     def solve(self, arguments=None, /, *, tol=1e-7):
-        return self.system.solve(constrain=self.constraints, arguments=arguments or {}, tol=tol, method=LinesearchNewton())
+        return self.system.solve(constrain=self.constraints, arguments=arguments or {}, tol=tol)
 
     @treelog.withcontext
     def jacobian(self, f, y, arguments):
