@@ -1,0 +1,19 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+nutils = "*"
+numpy = "*"
+scipy = "*"
+matplotlib = "*"
+meshio = "*"
+csgmsh = "*"
+gmsh = "*"
+notebook = "*"
+
+[dev-packages]
+
+[requires]
+python_version = "3.11"

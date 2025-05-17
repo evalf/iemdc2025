@@ -1,4 +1,4 @@
-from contextlib import contextmanager
+from contextlib import contextmanager, ExitStack
 import IPython.display
 import os.path
 from pathlib import Path
@@ -31,7 +31,9 @@ class IPythonImageLog:
 
     @contextmanager
     def open(self, filename, mode, level):
-        with NamedTemporaryFile('wb', suffix=os.path.splitext(filename)[1], delete_on_close=False) as f:
+        with ExitStack() as stack:
+            f = stack.enter_context(NamedTemporaryFile('wb', suffix=os.path.splitext(filename)[1], delete=False))
+            stack.callback(os.unlink, f.name)
             yield f
             f.close()
             data = Path(f.name).read_bytes()
