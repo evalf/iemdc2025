@@ -149,7 +149,7 @@ class Geometry:
         # Plot the mesh and subdomain.
         with export.mplfigure('mesh.png') as fig:
             fig.suptitle('mesh and subdomains')
-            ax = fig.add_subplot((0.1, 0.25, 0.8, 0.65))
+            ax = fig.add_axes((0.1, 0.25, 0.8, 0.65))
 
             handles = []
             labels = []
