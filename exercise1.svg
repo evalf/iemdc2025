@@ -1,4 +1,26 @@
-<svg version="1.1" baseProfile="full" xmlns="http://www.w3.org/2000/svg" viewBox="-150 -150 300 300" width="300px" height="300px">
+<svg
+    version="1.1"
+    baseProfile="full"
+    xmlns="http://www.w3.org/2000/svg"
+    xmlns:xlink="http://www.w3.org/1999/xlink"
+    xmlns:ev="http://www.w3.org/2001/xml-events"
+    viewBox="-150 -150 300 300"
+    width="300px"
+    height="300px"
+>
+    <defs>
+        <marker
+            id="arrow"
+            viewBox="0 0 10 10"
+            refX="5"
+            refY="5"
+            markerWidth="6"
+            markerHeight="6"
+            orient="auto-start-reverse"
+        >
+            <path d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+    </defs>
     <g transform="scale(125 -125)" stroke-width="0.008px">
         <circle r="1" fill="none" stroke="black"/>
         <circle r="0.1" fill="none" stroke="black"/>
@@ -17,5 +39,17 @@
               0.1 0.1 90 0 1  0.0 -0.1
               0.1 0.1 90 0 1  0.1  0.0
             Z"/>
+    </g>
+    <g transform="translate(-120 120)">
+        <path d="M 0 0 l 20 0" stroke-width="1px" fill="none" stroke="black" marker-end="url(#arrow)"/>
+        <path d="M 0 0 l 0 -20" stroke-width="1px" fill="none" stroke="black" marker-end="url(#arrow)"/>
+        <g transform="translate(27 3)">
+            <text x="0" y="0" font-size="10px" font-family="sans">x</text>
+            <text x="6" y="3" font-size="7px" font-family="sans">0</text>
+        </g>
+        <g transform="translate(-5 -30)">
+            <text x="0" y="0" font-size="10px" font-family="sans">x</text>
+            <text x="6" y="3" font-size="7px" font-family="sans">1</text>
+        </g>
     </g>
 </svg>
