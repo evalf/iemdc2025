@@ -43,7 +43,7 @@ def _assemble_helper(blocks, axis, mask, *inner_masks):
     return numpy.concatenate(blocks, axis=axis)[(slice(None),)*axis + (mask,)]
 
 @treelog.withcontext
-def minimize(scalar, residual, target, trial, test, *, tol, constrain=None, arguments=None):
+def minimize(scalar, target, residual, trial, test, *, tol, constrain=None, arguments=None):
     scalar = scalar.as_evaluable_array
     residual = residual.as_evaluable_array
     arg_objects = {
@@ -227,7 +227,7 @@ if __name__ == '__main__':
     z = Argument('z', ())
     f = numpy.sum((y - 1)**2)
     g = numpy.sum(z * (y - x - 2))
-    minimize(f, g, 'x', 'y', 'z', tol=1e-4)
+    minimize(f, 'x', g, 'y', 'z', tol=1e-4)
 
     from nutils import mesh
     from nutils.expression_v2 import Namespace
@@ -241,4 +241,4 @@ if __name__ == '__main__':
     R = X.integral('(∇_i(v) ∇_i(u) - v w) dV' @ ns, degree=2)
     f = (X.integral('u dV' @ ns, degree=2) - 1)**2
     cons = System(X.boundary.integral('u^2 dS' @ ns, degree=4), 'u').solve_constraints(droptol=1e-10)
-    args = minimize(f, R, 'w', 'u', 'v', tol=1e-4, constrain=cons)
+    args = minimize(f, 'w', R, 'u', 'v', tol=1e-4, constrain=cons)

@@ -482,8 +482,8 @@ def optimize(
     fun = ('Pac + Pdc' @ machine.ns) / 'W' + λtorque * (machine.ns.τavg - torque)
     arguments = nutils_solver_extra.minimize(
         fun,
-        machine.residual,
         'Iacpeak,Idc,λtorque',
+        machine.residual,
         machine.trials,
         machine.tests,
         constrain=machine.constraints,
