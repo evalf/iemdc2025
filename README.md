@@ -1,22 +1,40 @@
-# IEMDC 2025 Tutorial 8
+# [IEMDC 2025] Tutorial 8
 
-## Download the content of this repository
+This repository contains two example implementations of electric motors using
+the open source Finite Element library [Nutils] for the hands-on part of [IEMDC
+2025] Tutorial 8: Design, Modelling and Mathematical Formulations of PM-Free
+Special Machines: from Theory to Practice.
 
-You can do that via `git` , or simply download the zip file and extract the content on your pc
+The two examples are provided in the form of a [Jupyter] Notebook. The first
+example, <exercise1.ipynb>, is a simplified reluctance motor, used to explain
+all concepts of modeling electric moters using Nutils. The second example,
+<exercise2.ipynb>, contains a model of a realistic variable flux reluctance
+machine in space-time.
+
+To participate either
+
+- visit <https://iemdc.evalf.com> or
+- follow the instructions below to download this repository, install Python,
+  Nutils and other dependencies and launch Jupyter Notebook on your own
+  computer.
+
+## Download the contents of this repository
+
+Download and unzip [this
+archive](https://github.com/evalf/iemdc2025/archive/refs/heads/main.zip)
+somewhere (we refer to this location as the *checkout dir* below). If you have
+`git` you can also make a checkout of this repository.
 
 ## Installing dependencies
 
-Make sure you have `Python` installed
+Make sure you have [Python]. Open a terminal and go to the *checkout dir*, the
+directory where the tutorial files are located. Install [Pipenv] by running
 
-Install `pipenv`, which is used to install the dependencies for this tutorial
-
-    pip install --user pipenv
+    python3 -m pip install --user pipenv
 
 Then run (this might take a while)
 
     python3 -m pipenv sync
-
-from the directory where the tutorial files are located, to install all dependencies.
 
 ## Starting Jupyter Notebook server
 
@@ -24,4 +42,10 @@ Start a Jupyter Notebook server using
 
     python3 -m pipenv run python3 -m notebook
 
-from this directory.
+from the *checkout dir*.
+
+[Nutils]: https://nutils.org/
+[IEMDC 2025]: https://www.iemdc.org/
+[Python]: https://www.python.org/
+[Pipenv]: https://pipenv.pypa.io/
+[Jupyter]: https://jupyter.org/
