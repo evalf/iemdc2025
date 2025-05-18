@@ -236,9 +236,9 @@ class Machine:
         ns.nr_i = 'x_i / r'
         ns.nphi_i = 'D_ji nr_j'
 
-        ns.A = function.field('A', T.basis('spline', degree=degree), X.basis('std', degree=degree)) * ref_mag_pot
-        ns.Atest = function.field('Atest', T.basis('spline', degree=degree), X.basis('std', degree=degree)) / (ref_field_strength / ref_length)
-        ns.B_i = 'D_ij grad_j(A)'
+        ns.A2 = function.field('A2', T.basis('spline', degree=degree), X.basis('std', degree=degree)) * ref_mag_pot
+        ns.beta2 = function.field('beta2', T.basis('spline', degree=degree), X.basis('std', degree=degree)) / (ref_field_strength / ref_length)
+        ns.B_i = 'D_ij grad_j(A2)'
         ns.Bmagsqr = 'B_i B_i'
         ns.Bmag = 'sqrt(abs(Bmagsqr))'
         #ns.nu = numpy.choose(X.indicator('iron'), [1 / ns.mu0 * Permeability('H/m'), nuiron(ns.Bmagsqr) * Permeability('H/m')]) / Permeability('H/m')
@@ -258,8 +258,8 @@ class Machine:
             ])),
             tol=1e-6 * ref_length,
         )
-        A_ac_centers = numpy.reshape(ac_centers.bind(ns.A), (-1, 3, 2))
-        ns.flux = numpy.sum(A_ac_centers[:,:,0] - A_ac_centers[:,:,1], axis=0) * geometry.stack_length * geometry.structural_multiplicity
+        A2_ac_centers = numpy.reshape(ac_centers.bind(ns.A2), (-1, 3, 2))
+        ns.flux = numpy.sum(A2_ac_centers[:,:,0] - A2_ac_centers[:,:,1], axis=0) * geometry.stack_length * geometry.structural_multiplicity
 
         ns.emf_i = '∂t(flux_i) nturnsac'
 
@@ -306,18 +306,19 @@ class Machine:
 
         # WEAK FORM
 
-        residual = (T * X).integral('(-grad_i(Atest) grad_i(A) nu + Atest J) dV dthetam' @ ns, degree=2 * degree) / (ref_area * thetamperiod)
+        residual = (T * X).integral('(-grad_i(beta2) grad_i(A2) nu + beta2 J) dV dthetam' @ ns, degree=2 * degree) / (ref_area * thetamperiod)
         residual += function.linearize(
-            rotation_interface.integral('λ [A] dS dthetam' @ ns) / (ref_length * ref_mag_pot * thetamperiod),
-            'λ:λtest,A:Atest',
+            rotation_interface.integral('λ [A2] dS dthetam' @ ns) / (ref_length * ref_mag_pot * thetamperiod),
+            'A2:beta2,λ:gamma',
         )
-        trials = ['A', 'λ']
+        trials = ['A2', 'λ']
+        tests = ['beta2', 'gamma']
 
-        sqr = (T * X.boundary['outer,inner']).integral('A^2 dS dthetam' @ ns, degree=degree * 2 + 1) / (ref_mag_pot**2 * ref_surf * thetamperiod)
-        constraints = System(sqr, trial='A').solve_constraints(droptol=1e-15)
+        sqr = (T * X.boundary['outer,inner']).integral('A2^2 dS dthetam' @ ns, degree=degree * 2 + 1) / (ref_mag_pot**2 * ref_surf * thetamperiod)
+        constraints = System(sqr, trial='A2').solve_constraints(droptol=1e-15)
 
         assert numpy.ndim(residual) == 0
-        system = System(residual, trial=trials, test=tuple(trial+'test' for trial in trials))
+        system = System(residual, trial=trials, test=tests)
 
         # VARIABLES TO KEEP
 
@@ -330,7 +331,7 @@ class Machine:
         self.residual = residual
         self.constraints = constraints
         self.trials = tuple(trials)
-        self.tests = tuple(trial + 'test' for trial in trials)
+        self.tests = tuple(tests)
         self.system = system
 
     @treelog.withcontext
@@ -403,7 +404,7 @@ class Machine:
             ax.set_aspect('equal')
             ax.autoscale(enable=True, axis='both', tight=True)
 
-    def plot_thetam(self, v, vunit=None, *, title=None, arguments=None):
+    def plot_thetam(self, v, vunit=None, *, title=None, arguments=None, phase=False):
         vlabel = None
 
         if isinstance(v, str):
@@ -419,72 +420,34 @@ class Machine:
             else:
                 vlabel = f'{vlabel} [{vunit}]'
 
-        if v.shape != ():
-            raise ValueError(f'expected an `v` with shape () but got {v.shape}')
+        if phase:
+            desired_shape = 3,
+        else:
+            desired_shape = ()
+        if v.shape != desired_shape:
+            raise ValueError(f'expected an `v` with shape {desired_shape} but got {v.shape}')
 
         if title is None:
             raise ValueError('either `v` must be a `str` or `title` must be specified')
 
         Tsmpl = self.T.sample('bezier', 17)
+        tri = Tsmpl.tri
         thetam, v = Tsmpl.eval([self.ns.thetam / plt_angle, v], arguments or {})
+
+        if phase:
+            n = self.nthetamperiods // self.geometry.n_rotor_teeth_div_mult
+            tri = numpy.concatenate([tri + i * Tsmpl.npoints for i in range(n)], axis=0)
+            thetam = numpy.concatenate([thetam + i * self.thetamperiod / plt_angle for i in range(n)], axis=0)
+            v = numpy.concatenate([(1 - 2 * (i % 2)) * v[:,i % 3] for i in range(n)], axis=0)
 
         export.triplot(
             f'{title}.svg',
             thetam[:,None],
             v,
-            tri=Tsmpl.tri,
+            tri=tri,
             plabel=f'$\\theta_m$ [{plt_angle}]',
             vlabel=vlabel,
         )
-
-    def _plot_time_phases(self, v, vunit=None, *, title=None, arguments=None):
-        vlabel = None
-
-        if isinstance(v, str):
-            if title is None:
-                title = v
-            vlabel = v
-            v @= self.ns
-
-        if vunit is not None:
-            v /= vunit
-            if vlabel is None:
-                vlabel = f'[{vunit}]'
-            else:
-                vlabel = f'{vlabel} [{vunit}]'
-
-        if v.shape != (3,):
-            raise ValueError(f'expected an `v` with shape (3,) but got {v.shape}')
-
-        if title is None:
-            raise ValueError('either `v` must be a `str` or `title` must be specified')
-
-        Tsmpl = self.T.sample('bezier', 17)
-
-        n = self.nthetamperiods // self.geometry.n_rotor_teeth_div_mult
-        thetam, v = Tsmpl.eval([self.ns.thetam / plt_angle, v], arguments or {})
-
-        tri_full = numpy.concatenate([Tsmpl.tri + i * Tsmpl.npoints for i in range(n)], axis=0)
-        thetam_full = numpy.concatenate([thetam + i * self.thetamperiod / plt_angle for i in range(n)], axis=0)
-        v_0_full = numpy.concatenate([(1 - 2 * (i % 2)) * v[:,i % 3] for i in range(n)], axis=0)
-
-        export.triplot(
-            f'{title}.svg',
-            thetam_full[:,None],
-            v_0_full,
-            tri=tri_full,
-            plabel=f'$\\theta_m$ [{plt_angle}]',
-            vlabel=vlabel,
-        )
-
-    def plot_flux(self, arguments):
-        self._plot_time_phases('flux_i', plt_flux, arguments=arguments)
-
-    def plot_Iac(self, arguments):
-        self._plot_time_phases('Iac_i', plt_flux, arguments=arguments)
-
-    def plot_Uac(self, arguments):
-        self._plot_time_phases('Uac_i', plt_flux, arguments=arguments)
 
     def plot_field(self, v, vunit=None, *, thetam, vlabel=None, title=None, clim=None, arguments=None, **kwargs):
         xunit = 'cm'
@@ -546,8 +509,8 @@ def optimize(
     Iacpeak = function.Argument('Iacpeak', (), float) * ElectricCurrent('A')
     Idc = function.Argument('Idc', (), float) * ElectricCurrent('A')
     arguments = {}
-    sqr = ((Iacpeak - driver.peak_ac_current) / 'A')**2
-    sqr += ((Idc - driver.dc_current) / 'A')**2
+    sqr = ((Iacpeak - driver.peak_ac_current) / 'A2')**2
+    sqr += ((Idc - driver.dc_current) / 'A2')**2
     arguments = System(sqr, 'Iacpeak,Idc').solve(tol=1e-10)
     driver = dataclasses.replace(
         driver,
