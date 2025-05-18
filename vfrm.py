@@ -11,7 +11,7 @@ from nutils import export, function, mesh, SI, sample
 from nutils.expression_v2 import Namespace
 from nutils.element import getsimplex
 from nutils.pointsseq import PointsSequence
-from nutils.SI import Area, CurrentDensity, Dimension, ElectricCurrent, ElectricPotential, Force, Length, MagneticFieldStrength, MagneticFluxDensity, Resistance, Time, Quantity
+from nutils.SI import Area, CurrentDensity, Dimension, ElectricCurrent, ElectricPotential, Force, Length, MagneticFieldStrength, MagneticFluxDensity, Resistance, Time, Quantity, Power
 from nutils.sample import Sample
 from nutils.solver import System, LinesearchNewton
 from nutils.transformseq import PlainTransforms
@@ -229,8 +229,8 @@ class Machine:
         ns.x = x
         ns.r = numpy.linalg.norm(ns.x)
         ns.phi = arctan2(ns.x[1], ns.x[0])
-        ns.define_for('thetam', gradient='∂thetam', jacobians=('dthetam',))
-        ns.define_for('t', gradient='∂t', jacobians=('dt',))
+        ns.define_for('thetam', gradient='dthetam', jacobians=('dThetam',))
+        ns.define_for('t', gradient='dt', jacobians=('dT',))
         ns.define_for('x0', gradient='grad0', jacobians=('dV0', 'dS0'), normal='n0', spaces=X.spaces)
         ns.define_for('x', gradient='grad', jacobians=('dV', 'dS'), normal='n', spaces=X.spaces)
         ns.nr_i = 'x_i / r'
@@ -261,15 +261,17 @@ class Machine:
         A2_ac_centers = numpy.reshape(ac_centers.bind(ns.A2), (-1, 3, 2))
         ns.flux = numpy.sum(A2_ac_centers[:,:,0] - A2_ac_centers[:,:,1], axis=0) * geometry.stack_length * geometry.structural_multiplicity
 
-        ns.emf_i = '∂t(flux_i) nturnsac'
+        ns.emf_i = 'dt(flux_i) nturnsac'
 
         ns.densdc = geometry.n_turns_ac / X['dc_0_p'].integral(ns.dV0, degree=2)
         ns.densac = geometry.n_turns_ac / X['ac_0_p'].integral(ns.dV0, degree=2)
+        ns.Rdc = geometry.dc_resistance
         ns.Idc = driver.dc_current
-        ns.Udc = ns.Idc * geometry.dc_resistance
+        ns.Udc = 'Rdc Idc'
+        ns.Rac = geometry.ac_resistance
         ns.Iacpeak = driver.peak_ac_current
         ns.Iac = driver.ac_current(geometry, ns.thetam)
-        ns.Uac = ns.Iac * geometry.ac_resistance + ns.emf
+        ns.Uac_i = 'Iac_i Rac + emf_i'
         ns.J = '(δp - δn) (δdc Idc densdc + δac_i Iac_i densac)'
 
         #ns.torque = X['air_gap'].integral('B_i nr_i B_j nphi_j r dV / mu0' @ ns, degree=2 * degree) * geometry.stack_length * geometry.structural_multiplicity  / geometry.height_air_gap
@@ -278,18 +280,15 @@ class Machine:
 
         ns.λ = function.field('λ', T.basis('spline', degree=degree), X.boundary['interface_stator'].basis('std', degree=degree))
 
-        ns.thetamavg = lambda q: T.integral(q * ns.dthetam, degree=2 * degree) / T.integral(ns.dthetam, degree=2 * degree)
-        ns.thetamstddev = lambda q: numpy.sqrt(ns.thetamavg((q - ns.thetamavg(q))**2))
-        ns.tavg = lambda q: T.integral(q * ns.dt, degree=2 * degree) / T.integral(ns.dt, degree=2 * degree)
+        ns.Tavg = lambda q: T.integral(q * ns.dThetam, degree=3 * degree) / T.integral(ns.dThetam, degree=3 * degree)
+        ns.Tstddev = lambda q: numpy.sqrt(ns.Tavg((q - ns.Tavg(q))**2))
 
-        ns.avgtorque = 'thetamavg(torque)'
-        ns.stddevtorque = 'thetamstddev(torque)'
+        ns.avgtorque = 'Tavg(torque)'
+        ns.stddevtorque = 'Tstddev(torque)'
 
-        ns.Pac = 'tavg(Iac_i Uac_i)'
-        #ns.Sac = 'tavg(Iac_i Uac_i)'
-        #ns.Pac = ('tavg(Iac_i Iac_i)' @ ns) * geometry.ac_resistance
+        ns.Pac = 'Iac_i Uac_i'
         ns.Pdc = 'Idc Udc'
-        ns.Protor = 'avgtorque omegam / rad'
+        ns.Protor = 'torque omegam / rad'
 
         # INTERFACE BETWEEN STATOR AND ROTOR
 
@@ -306,15 +305,15 @@ class Machine:
 
         # WEAK FORM
 
-        residual = (T * X).integral('(-grad_i(beta2) grad_i(A2) nu + beta2 J) dV dthetam' @ ns, degree=2 * degree) / (ref_area * thetamperiod)
+        residual = (T * X).integral('(-grad_i(beta2) grad_i(A2) nu + beta2 J) dV dThetam' @ ns, degree=2 * degree) / (ref_area * thetamperiod)
         residual += function.linearize(
-            rotation_interface.integral('λ [A2] dS dthetam' @ ns) / (ref_length * ref_mag_pot * thetamperiod),
+            rotation_interface.integral('λ [A2] dS dThetam' @ ns) / (ref_length * ref_mag_pot * thetamperiod),
             'A2:beta2,λ:gamma',
         )
         trials = ['A2', 'λ']
         tests = ['beta2', 'gamma']
 
-        sqr = (T * X.boundary['outer,inner']).integral('A2^2 dS dthetam' @ ns, degree=degree * 2 + 1) / (ref_mag_pot**2 * ref_surf * thetamperiod)
+        sqr = (T * X.boundary['outer,inner']).integral('A2^2 dS dThetam' @ ns, degree=degree * 2 + 1) / (ref_mag_pot**2 * ref_surf * thetamperiod)
         constraints = System(sqr, trial='A2').solve_constraints(droptol=1e-15)
 
         assert numpy.ndim(residual) == 0
@@ -435,21 +434,39 @@ class Machine:
         thetam, v = Tsmpl.eval([self.ns.thetam / plt_angle, v], arguments or {})
 
         if phase:
+
             n = self.nthetamperiods // self.geometry.n_rotor_teeth_div_mult
             tri = numpy.concatenate([tri + i * Tsmpl.npoints for i in range(n)], axis=0)
             thetam = numpy.concatenate([thetam + i * self.thetamperiod / plt_angle for i in range(n)], axis=0)
-            v = numpy.concatenate([(1 - 2 * (i % 2)) * v[:,i % 3] for i in range(n)], axis=0)
+            v = numpy.stack([
+                numpy.concatenate([(1 - 2 * (i % 2)) * v[:,(i + j) % 3] for i in range(n)], axis=0)
+                for j in range(3)
+            ])
 
-        export.triplot(
-            f'{title}.svg',
-            thetam[:,None],
-            v,
-            tri=tri,
-            plabel=f'$\\theta_m$ [{plt_angle}]',
-            vlabel=vlabel,
-        )
+            with export.mplfigure(f'{title}.svg') as fig:
+                ax = fig.add_subplot(1, 1, 1)
+                labels = []
+                for j, phase, color in zip(range(3), 'abc', matplotlib.colormaps['tab10'].colors):
+                    lc = ax.add_collection(LineCollection(numpy.asarray([thetam, v[j]]).T[tri], colors=color))
+                    labels.append((lc, f'phase {phase}'))
+                ax.legend(*zip(*labels))
+                ax.set_xlabel(f'$\\theta_m$ [{plt_angle}]')
+                ax.set_ylabel(vlabel)
+                ax.autoscale(enable=True, axis='x', tight=True)
+                ax.autoscale(enable=True, axis='y', tight=False)
 
-    def plot_field(self, v, vunit=None, *, thetam, vlabel=None, title=None, clim=None, arguments=None, **kwargs):
+        else:
+
+            export.triplot(
+                f'{title}.svg',
+                thetam[:,None],
+                v,
+                tri=tri,
+                plabel=f'$\\theta_m$ [{plt_angle}]',
+                vlabel=vlabel,
+            )
+
+    def plot_field(self, v, vunit=None, *, thetam, vlabel=None, title=None, clim=None, arguments=None, contours=None, **kwargs):
         xunit = 'cm'
         if isinstance(v, str):
             if vlabel is None:
@@ -475,6 +492,22 @@ class Machine:
                 clim=clim,
                 **kwargs,
             )
+            if contours is not None:
+                if isinstance(contours, str):
+                    contours @= self.ns
+                if isinstance(contours, Quantity):
+                    contours = contours.unwrap()
+                contours = (Tsmpl * Xsmpl).eval(contours, arguments or {})
+                ax.tricontour(
+                    x.T[0],
+                    x.T[1],
+                    Xsmpl.tri,
+                    contours,
+                    levels=numpy.linspace(numpy.min(contours), numpy.max(contours), num=14),
+                    colors='w',
+                    linestyles='solid',
+                    linewidths=.9,
+                )
             ax.set_xlabel(f'$x_0$ [{xunit}]')
             ax.set_ylabel(f'$x_1$ [{xunit}]')
             fig.colorbar(im, label=vlabel if vunit is None else f'{vlabel or ""} [{vunit}]')
@@ -494,52 +527,9 @@ def main(
 ):
     machine = Machine(geometry, driver, nelems_angle, degree)
     arguments = machine.solve()
-    machine.plot_field('B_0', 'T', arguments=arguments, angle=Angle('0deg'))
-    machine.print_scalar('avgtorque', 'N*m', arguments=arguments)
-    #machine.plot(arguments)
-
-
-def optimize(
-    geometry: Geometry = Geometry(),
-    driver: Driver = Driver(),
-    nelems_angle: int = 6,
-    degree: int = 2,
-    torque: Torque = Torque('5N*m'),
-):
-    Iacpeak = function.Argument('Iacpeak', (), float) * ElectricCurrent('A')
-    Idc = function.Argument('Idc', (), float) * ElectricCurrent('A')
-    arguments = {}
-    sqr = ((Iacpeak - driver.peak_ac_current) / 'A2')**2
-    sqr += ((Idc - driver.dc_current) / 'A2')**2
-    arguments = System(sqr, 'Iacpeak,Idc').solve(tol=1e-10)
-    driver = dataclasses.replace(
-        driver,
-        peak_ac_current=Iacpeak,
-        dc_current=Idc,
-    )
-    machine = Machine(geometry, driver, nelems_angle, degree)
-
-    arguments = machine.solve(arguments)
-
-    λtorque = function.field('λtorque') / Torque('N*m')
-
-    import nutils_solver_extra
-    fun = ('Pac + Pdc' @ machine.ns) / 'W' + λtorque * (machine.ns.avgtorque - torque)
-    arguments = nutils_solver_extra.minimize(
-        fun,
-        'Iacpeak,Idc,λtorque',
-        machine.residual,
-        machine.trials,
-        machine.tests,
-        constrain=machine.constraints,
-        arguments=arguments,
-        tol=1e-8,
-    )
-
-    smpld_Iacpeak, smpld_Idc = function.eval([Iacpeak, Idc], arguments=arguments)
-    treelog.user(f'optimal ac peak current: {smpld_Iacpeak:.3A}')
-    treelog.user(f'optimal dc current: {smpld_Idc:.3A}')
-    machine.plot(arguments)
+    machine.plot_mesh()
+    machine.plot_field('sqrt(B_i B_i)', 'T', arguments=arguments, contours='A2', angle=Angle('0deg'))
+    machine.print_scalar('Tavg(torque)', 'N*m', arguments=arguments)
 
 
 def cos(angle):
