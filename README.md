@@ -6,10 +6,10 @@ the open source Finite Element library [Nutils] for the hands-on part of [IEMDC
 Special Machines: from Theory to Practice.
 
 The two examples are provided in the form of a [Jupyter] Notebook. The first
-example, <exercise1.ipynb>, is a simplified reluctance motor, used to explain
-all concepts of modeling electric moters using Nutils. The second example,
-<exercise2.ipynb>, contains a model of a realistic variable flux reluctance
-machine in space-time.
+example, [exercise1.ipynb](blob/main/exercise1.ipynb), is a simplified
+reluctance motor, used to explain all concepts of modeling electric moters
+using Nutils. The second example, [exercise2.ipynb](blob/main/exercise2.ipynb),
+contains a model of a realistic variable flux reluctance machine in space-time.
 
 To participate either
 
